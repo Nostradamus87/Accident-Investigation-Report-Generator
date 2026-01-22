@@ -9,115 +9,106 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .app-loading { display: flex; justify-content: center; align-items: center; height: 100vh; font-weight: bold; color: #666; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div class="app-loading">System Loading... (If this stays, check Console)</div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
-
-        // This function safely creates icons since the direct React import failed
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const iconRef = useRef(null);
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [name]);
-            return <i data-lucide={name} style={{width: size, height: size}} className={className}></i>;
+        // Using built-in SVGs instead of Lucide to prevent "lucide is not defined" errors
+        const Icons = {
+            MapPin: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>,
+            Truck: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
         };
+
+        const { useState, useRef } = React;
 
         const App = () => {
             const reportRef = useRef(null);
             const [isPreview, setIsPreview] = useState(false);
             const [formData, setFormData] = useState({
-                kejadian: { lokasi: '', tarikh: '' },
-                lori: { noPlat: '' }
+                lokasi: '',
+                noPlat: ''
             });
 
-            const downloadPDF = () => {
+            const generatePDF = () => {
                 const element = reportRef.current;
-                const opt = {
-                    margin: 10,
-                    filename: 'Laporan_HSE.pdf',
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2 },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                };
-                html2pdf().set(opt).from(element).save();
+                html2pdf().from(element).save(`HSE_Report_${formData.noPlat || 'New'}.pdf`);
             };
 
             if (isPreview) {
                 return (
-                    <div className="min-h-screen p-8 flex flex-col items-center">
-                        <div className="bg-white p-10 shadow-2xl border" ref={reportRef} style={{ width: '210mm' }}>
+                    <div className="min-h-screen p-6 flex flex-col items-center">
+                        <div ref={reportRef} className="bg-white p-12 shadow-2xl w-[210mm] min-h-[297mm] border border-gray-300">
                             <h1 className="text-3xl font-black text-center text-red-700 uppercase">Laporan HSE</h1>
-                            <div className="my-6 border-b-4 border-black"></div>
-                            <div className="space-y-4 text-lg">
-                                <p><strong>Lokasi:</strong> {formData.kejadian.lokasi || 'Tidak dinyatakan'}</p>
-                                <p><strong>No. Plat Lori:</strong> {formData.lori.noPlat || 'Tidak dinyatakan'}</p>
+                            <div className="h-1 bg-black my-6"></div>
+                            <div className="space-y-6 text-xl">
+                                <p><strong>Lokasi:</strong> {formData.lokasi || '---'}</p>
+                                <p><strong>No Plat:</strong> {formData.noPlat || '---'}</p>
                             </div>
                         </div>
-                        <div className="mt-6 flex gap-4">
-                            <button onClick={() => setIsPreview(false)} className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold">KEMBALI</button>
-                            <button onClick={downloadPDF} className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold">MUAT TURUN PDF</button>
+                        <div className="mt-8 flex gap-4">
+                            <button onClick={() => setIsPreview(false)} className="bg-gray-700 text-white px-8 py-3 rounded-xl font-bold">KEMBALI</button>
+                            <button onClick={generatePDF} className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold">MUAT TURUN PDF</button>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="max-w-xl mx-auto my-12 bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border">
-                    <div className="bg-red-700 p-10 text-white">
-                        <h1 className="text-3xl font-black uppercase tracking-tight">HSE Report Generator</h1>
-                        <p className="opacity-80 font-medium">Sistem Penjanaan Laporan Digital</p>
+                <div className="max-w-md mx-auto my-12 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
+                    <div className="bg-red-700 p-8 text-white">
+                        <h1 className="text-2xl font-black uppercase">Report Tool</h1>
+                        <p className="opacity-70">HSE Digital System</p>
                     </div>
 
-                    <div className="p-10 space-y-8">
+                    <div className="p-8 space-y-6">
                         <div>
-                            <div className="flex items-center gap-2 mb-4 text-red-700 font-bold uppercase text-xs tracking-widest">
-                                <Icon name="map-pin" size={16} /> 1. Maklumat Kejadian
-                            </div>
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase mb-2"><Icons.MapPin /> Lokasi Kejadian</label>
                             <input 
-                                className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-500 outline-none transition-all" 
-                                placeholder="Masukkan Lokasi..."
-                                onChange={(e) => setFormData({...formData, kejadian: {...formData.kejadian, lokasi: e.target.value}})}
+                                className="w-full p-4 bg-gray-50 border rounded-2xl focus:border-red-500 outline-none" 
+                                placeholder="Cth: Simpang Ampat"
+                                value={formData.lokasi}
+                                onChange={(e) => setFormData({...formData, lokasi: e.target.value})}
                             />
                         </div>
 
                         <div>
-                            <div className="flex items-center gap-2 mb-4 text-red-700 font-bold uppercase text-xs tracking-widest">
-                                <Icon name="truck" size={16} /> 2. Maklumat Lori
-                            </div>
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase mb-2"><Icons.Truck /> No Plat Lori</label>
                             <input 
-                                className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-500 outline-none transition-all" 
-                                placeholder="Masukkan No. Plat..."
-                                onChange={(e) => setFormData({...formData, lori: {...formData.lori, noPlat: e.target.value}})}
+                                className="w-full p-4 bg-gray-50 border rounded-2xl focus:border-red-500 outline-none" 
+                                placeholder="Cth: ABC 1234"
+                                value={formData.noPlat}
+                                onChange={(e) => setFormData({...formData, noPlat: e.target.value})}
                             />
                         </div>
 
                         <button 
                             onClick={() => setIsPreview(true)}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl active:scale-95"
+                            className="w-full bg-red-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-red-700 transition-all shadow-lg active:scale-95"
                         >
-                            JANA & LIHAT LAPORAN
+                            JANA LAPORAN
                         </button>
                     </div>
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // Standard React 18 Mounting
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } catch (err) {
+            document.getElementById('root').innerHTML = `<div style="color:red; padding:20px;">Mounting Error: ${err.message}</div>`;
+        }
     </script>
 </body>
 </html>
