@@ -3,106 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HSE Report Tool</title>
+    <title>HSE Report System</title>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // This tells the browser to use the Lucide Icons from the web
-        const { 
-            Camera, Plus, Trash2, Download, FileText, CheckCircle, 
-            Truck, User, MapPin, AlertTriangle, Wand2, ClipboardList, 
-            Users, Printer, FileDown 
-        } = lucide;
-
         const { useState, useRef, useEffect } = React;
+
+        // This function safely creates icons since the direct React import failed
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [name]);
+            return <i data-lucide={name} style={{width: size, height: size}} className={className}></i>;
+        };
 
         const App = () => {
             const reportRef = useRef(null);
             const [isPreview, setIsPreview] = useState(false);
             const [formData, setFormData] = useState({
-                kejadian: { jenisKemalangan: 'Jalan Raya', tarikh: '', masa: '', lokasi: '', perihalan: '' },
-                mangsaSaksi: { namaMangsa: '', noKPMangsa: '', keterukanKecederaan: 'Tiada kecederaan' },
-                lori: { noPendaftaran: '', jenamaModel: '' },
-                punca: { pihak: {}, faktor: {} },
-                tindakan: [{ id: Date.now(), perihal: '', status: '' }],
-                gambar: []
+                kejadian: { lokasi: '', tarikh: '' },
+                lori: { noPlat: '' }
             });
 
-            // Simplified PDF function for testing
             const downloadPDF = () => {
                 const element = reportRef.current;
-                html2pdf().from(element).save('Laporan_HSE.pdf');
+                const opt = {
+                    margin: 10,
+                    filename: 'Laporan_HSE.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save();
             };
-
-            const SectionHeader = ({ icon: Icon, title }) => (
-                <div className="flex items-center gap-2 mb-4 border-b pb-2 text-red-700">
-                    <Icon size={18} />
-                    <h2 className="font-bold uppercase text-sm">{title}</h2>
-                </div>
-            );
 
             if (isPreview) {
                 return (
-                    <div className="p-8 bg-neutral-100 min-h-screen flex flex-col items-center">
-                        <div className="bg-white p-10 shadow-xl mb-4" ref={reportRef} style={{ width: '210mm' }}>
-                            <h1 className="text-2xl font-black text-center text-red-700">LAPORAN KEMALANGAN HSE</h1>
-                            <hr className="my-4 border-2 border-black" />
-                            <p><strong>Lokasi:</strong> {formData.kejadian.lokasi}</p>
-                            <p><strong>No Plat:</strong> {formData.lori.noPendaftaran}</p>
+                    <div className="min-h-screen p-8 flex flex-col items-center">
+                        <div className="bg-white p-10 shadow-2xl border" ref={reportRef} style={{ width: '210mm' }}>
+                            <h1 className="text-3xl font-black text-center text-red-700 uppercase">Laporan HSE</h1>
+                            <div className="my-6 border-b-4 border-black"></div>
+                            <div className="space-y-4 text-lg">
+                                <p><strong>Lokasi:</strong> {formData.kejadian.lokasi || 'Tidak dinyatakan'}</p>
+                                <p><strong>No. Plat Lori:</strong> {formData.lori.noPlat || 'Tidak dinyatakan'}</p>
+                            </div>
                         </div>
-                        <div className="flex gap-4">
-                            <button onClick={() => setIsPreview(false)} className="bg-gray-500 text-white px-6 py-2 rounded-lg font-bold">Back</button>
-                            <button onClick={downloadPDF} className="bg-red-600 text-white px-6 py-2 rounded-lg font-bold">Save as PDF</button>
+                        <div className="mt-6 flex gap-4">
+                            <button onClick={() => setIsPreview(false)} className="bg-gray-800 text-white px-8 py-3 rounded-xl font-bold">KEMBALI</button>
+                            <button onClick={downloadPDF} className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold">MUAT TURUN PDF</button>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="max-w-2xl mx-auto my-10 bg-white shadow-2xl rounded-3xl overflow-hidden border">
-                    <div className="bg-red-700 p-8 text-white">
-                        <h1 className="text-2xl font-black uppercase">HSE Report Generator</h1>
-                        <p className="opacity-70">Fill in the details for your client</p>
+                <div className="max-w-xl mx-auto my-12 bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border">
+                    <div className="bg-red-700 p-10 text-white">
+                        <h1 className="text-3xl font-black uppercase tracking-tight">HSE Report Generator</h1>
+                        <p className="opacity-80 font-medium">Sistem Penjanaan Laporan Digital</p>
                     </div>
-                    
-                    <div className="p-8 space-y-8">
-                        <section>
-                            <SectionHeader icon={MapPin} title="1. Butiran Kejadian" />
+
+                    <div className="p-10 space-y-8">
+                        <div>
+                            <div className="flex items-center gap-2 mb-4 text-red-700 font-bold uppercase text-xs tracking-widest">
+                                <Icon name="map-pin" size={16} /> 1. Maklumat Kejadian
+                            </div>
                             <input 
-                                className="w-full p-3 border-2 rounded-xl mb-4" 
-                                placeholder="Lokasi Kejadian"
+                                className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-500 outline-none transition-all" 
+                                placeholder="Masukkan Lokasi..."
                                 onChange={(e) => setFormData({...formData, kejadian: {...formData.kejadian, lokasi: e.target.value}})}
                             />
-                        </section>
+                        </div>
 
-                        <section>
-                            <SectionHeader icon={Truck} title="2. Butiran Lori" />
+                        <div>
+                            <div className="flex items-center gap-2 mb-4 text-red-700 font-bold uppercase text-xs tracking-widest">
+                                <Icon name="truck" size={16} /> 2. Maklumat Lori
+                            </div>
                             <input 
-                                className="w-full p-3 border-2 rounded-xl" 
-                                placeholder="No Pendaftaran (Plat)"
-                                onChange={(e) => setFormData({...formData, lori: {...formData.lori, noPendaftaran: e.target.value}})}
+                                className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-red-500 outline-none transition-all" 
+                                placeholder="Masukkan No. Plat..."
+                                onChange={(e) => setFormData({...formData, lori: {...formData.lori, noPlat: e.target.value}})}
                             />
-                        </section>
+                        </div>
 
                         <button 
                             onClick={() => setIsPreview(true)}
-                            className="w-full bg-red-600 text-white py-4 rounded-2xl font-black hover:bg-red-700 shadow-lg transition-all"
+                            className="w-full bg-red-600 hover:bg-red-700 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl active:scale-95"
                         >
-                            JANA LAPORAN PDF
+                            JANA & LIHAT LAPORAN
                         </button>
                     </div>
                 </div>
