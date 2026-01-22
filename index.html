@@ -9,15 +9,18 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        body { font-family: 'Inter', sans-serif; background-color: #e5e7eb; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         @media print {
             @page { size: A4; margin: 10mm; }
+            body { background: white !important; margin: 0; padding: 0 !important; }
             .no-print { display: none !important; }
         }
     </style>
@@ -26,235 +29,273 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // Mapping Icons for the Browser
+        const { 
+            Camera, Plus, Trash2, Download, FileText, CheckCircle, 
+            Truck, User, MapPin, AlertTriangle, Wand2, ClipboardList, 
+            Users, Printer, FileDown 
+        } = lucideReact;
+
         const { useState, useRef, useEffect } = React;
 
-        // Custom Component for Icons
-        const Icon = ({ name, size = 18, className = "" }) => {
-            const iconRef = useRef(null);
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            }, [name]);
-            return <i data-lucide={name} style={{width: size, height: size}} className={className}></i>;
-        };
-
         const App = () => {
-            const reportRef = useRef(null);
-            const [isPreview, setIsPreview] = useState(false);
-            const [rawText, setRawText] = useState('');
-            const [isGenerating, setIsGenerating] = useState(false);
+          const reportRef = useRef(null);
+          const [formData, setFormData] = useState({
+            kejadian: { jenisKemalangan: 'Jalan Raya', tarikh: '', masa: '', lokasi: '', perihalan: '' },
+            mangsaSaksi: { 
+              namaMangsa: '', noKPMangsa: '', umurMangsa: '', pengalamanKerja: '', keterukanKecederaan: 'Tiada kecederaan',
+              namaSaksi: '', noKPSaksi: '', umurSaksi: '', noTelSaksi: '',
+              namaPihakLain: '', noKPPihakLain: '', umurPihakLain: '', noTelPihakLain: '',
+              keterukanKecederaanPihakLain: 'Tiada kecederaan', maklumatTambahanPihakLain: ''
+            },
+            lori: { noPendaftaran: '', jenamaModel: '', jenisLori: '', kelajuanTerakhir: '', nomborDO: '', muatanMT: '', pemandu: '', syarikat: '' },
+            punca: {
+              pihak: { pekerjaSyarikat: false, kontraktor: false, pihakKetiga: false },
+              faktor: { latihan: false, sop: false, peralatan: false, ppe: false, keletihan: false, persekitaran: false, lainLain: '' }
+            },
+            tindakan: [ { id: Date.now(), perihal: '', tarikhSelesai: '', pegawai: '', status: '' } ],
+            gambar: []
+          });
+
+          const [rawText, setRawText] = useState('');
+          const [isPreview, setIsPreview] = useState(false);
+          const [showToast, setShowToast] = useState(false);
+          const [isGenerating, setIsGenerating] = useState(false);
+
+          // Helper: Section Header
+          const SectionHeader = ({ icon: Icon, title }) => (
+            <div className="flex items-center gap-2 mb-2 border-b pb-1 text-red-700">
+              <Icon size={16} />
+              <h2 className="font-bold uppercase tracking-wide text-xs">{title}</h2>
+            </div>
+          );
+
+          const getInjuryStyle = (severity) => {
+            const s = severity.toLowerCase();
+            if (s === 'fatality') return 'bg-red-600 text-white border-red-700';
+            if (s.includes('lost time injury') || s.includes('lti')) return 'bg-yellow-400 text-black border-yellow-500';
+            return 'bg-neutral-300 text-black border-neutral-400';
+          };
+
+          const handleAutoFill = () => {
+            if (!rawText.trim()) return;
+            const extract = (regex) => {
+              const match = rawText.match(regex);
+              return match ? match[1].trim() : null;
+            };
+            const newValues = { ...formData };
             
-            // FULL ORIGINAL STATE
-            const [formData, setFormData] = useState({
-                kejadian: { jenisKemalangan: 'Jalan Raya', tarikh: '', masa: '', lokasi: '', perihalan: '' },
-                mangsaSaksi: { 
-                    namaMangsa: '', noKPMangsa: '', umurMangsa: '', pengalamanKerja: '', keterukanKecederaan: 'Tiada kecederaan',
-                    namaSaksi: '', noKPSaksi: '', umurSaksi: '', noTelSaksi: '',
-                    namaPihakLain: '', noKPPihakLain: '', umurPihakLain: '', noTelPihakLain: '',
-                    keterukanKecederaanPihakLain: 'Tiada kecederaan', maklumatTambahanPihakLain: ''
-                },
-                lori: { noPendaftaran: '', jenamaModel: '', jenisLori: '', kelajuanTerakhir: '', nomborDO: '', muatanMT: '', pemandu: '', syarikat: '' },
-                punca: {
-                    pihak: { pekerjaSyarikat: false, kontraktor: false, pihakKetiga: false },
-                    faktor: { latihan: false, sop: false, peralatan: false, ppe: false, keletihan: false, persekitaran: false, lainLain: '' }
-                },
-                tindakan: [{ id: Date.now(), perihal: '', tarikhSelesai: '', pegawai: '', status: '' }],
-                gambar: []
-            });
-
-            // ORIGINAL AUTO-FILL LOGIC
-            const handleAutoFill = () => {
-                if (!rawText.trim()) return;
-                const extract = (regex) => {
-                    const match = rawText.match(regex);
-                    return match ? match[1].trim() : null;
-                };
-                const newValues = { ...formData };
-                
-                const lokasi = extract(/Lokasi:\s*(.*)/i);
-                if (lokasi) newValues.kejadian.lokasi = lokasi;
-                const noPlat = extract(/No\. Pendaftaran:\s*(.*)/i);
-                if (noPlat) newValues.lori.noPendaftaran = noPlat;
-                const pemandu = extract(/Nama Pemandu:\s*(.*)/i);
-                if (pemandu) { 
-                    newValues.lori.pemandu = pemandu; 
-                    newValues.mangsaSaksi.namaMangsa = pemandu; 
-                }
-                
-                setFormData(newValues);
-                alert("Data Berjaya Diisi!");
-            };
-
-            const handleNestedChange = (section, field, value) => {
-                setFormData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
-            };
-
-            const handlePuncaCheckboxChange = (subSection, field) => {
-                setFormData(prev => ({ 
-                    ...prev, 
-                    punca: { ...prev.punca, [subSection]: { ...prev.punca[subSection], [field]: !prev.punca[subSection][field] } } 
-                }));
-            };
-
-            const downloadPDF = () => {
-                setIsGenerating(true);
-                const element = reportRef.current;
-                const opt = {
-                    margin: 10,
-                    filename: `Laporan_HSE_${formData.lori.noPendaftaran}.pdf`,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                };
-                html2pdf().set(opt).from(element).save().then(() => setIsGenerating(false));
-            };
-
-            const SectionHeader = ({ icon, title }) => (
-                <div className="flex items-center gap-2 mb-4 border-b pb-2 text-red-700">
-                    <Icon name={icon} size={18} />
-                    <h2 className="font-bold uppercase text-xs tracking-widest">{title}</h2>
-                </div>
-            );
-
-            const inputClass = "w-full p-3 border-2 border-gray-100 rounded-xl outline-none text-sm transition-all focus:border-red-500 bg-white";
-
-            // PREVIEW MODE
-            if (isPreview) {
-                return (
-                    <div className="min-h-screen bg-gray-200 p-4 md:p-8 flex flex-col items-center">
-                        <div className="fixed top-4 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-2xl flex gap-4 no-print z-50">
-                            <button onClick={() => setIsPreview(false)} className="px-6 py-2 bg-gray-100 rounded-xl font-bold">← Edit Data</button>
-                            <button onClick={downloadPDF} className="px-6 py-2 bg-red-600 text-white rounded-xl font-bold">Muat Turun PDF</button>
-                        </div>
-                        
-                        <div ref={reportRef} className="bg-white p-[15mm] shadow-2xl w-[210mm] min-h-[297mm] mt-20 border border-gray-300">
-                            <div className="text-center border-b-4 border-black pb-4 mb-8">
-                                <h1 className="text-3xl font-black uppercase tracking-tighter">Laporan Siasatan Kemalangan</h1>
-                                <p className="text-red-600 font-bold uppercase tracking-widest text-[10px]">Jabatan Keselamatan & Kesihatan Pekerjaan (HSE)</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="border-2 border-black p-4">
-                                    <h3 className="font-black bg-black text-white px-2 py-0.5 text-[10px] inline-block mb-3 uppercase">1. Butiran Kejadian</h3>
-                                    <p className="text-[11px]"><strong>Tarikh:</strong> {formData.kejadian.tarikh}</p>
-                                    <p className="text-[11px]"><strong>Lokasi:</strong> {formData.kejadian.lokasi}</p>
-                                    <p className="text-[11px] mt-2 italic">"{formData.kejadian.perihalan}"</p>
-                                </div>
-                                <div className="border-2 border-black p-4">
-                                    <h3 className="font-black bg-black text-white px-2 py-0.5 text-[10px] inline-block mb-3 uppercase">2. Butiran Kenderaan</h3>
-                                    <p className="text-[11px]"><strong>No. Plat:</strong> {formData.lori.noPendaftaran}</p>
-                                    <p className="text-[11px]"><strong>Pemandu:</strong> {formData.lori.pemandu}</p>
-                                </div>
-                            </div>
-
-                            <div className="border-2 border-black p-4 mb-6">
-                                <h3 className="font-black bg-black text-white px-2 py-0.5 text-[10px] inline-block mb-3 uppercase">3. Maklumat Mangsa</h3>
-                                <div className="grid grid-cols-2 text-[11px]">
-                                    <p><strong>Nama:</strong> {formData.mangsaSaksi.namaMangsa}</p>
-                                    <p><strong>Kecederaan:</strong> <span className="text-red-600 font-bold uppercase">{formData.mangsaSaksi.keterukanKecederaan}</span></p>
-                                </div>
-                            </div>
-
-                            <div className="mt-auto pt-20 flex justify-between px-10">
-                                <div className="text-center">
-                                    <div className="border-t border-black border-dotted w-40 mb-1"></div>
-                                    <p className="text-[9px] font-bold">Disediakan Oleh</p>
-                                </div>
-                                <div className="text-center">
-                                    <div className="border-t border-black border-dotted w-40 mb-1"></div>
-                                    <p className="text-[9px] font-bold">Disahkan Oleh</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
+            const tarikhRaw = extract(/Tarikh:\s*(.*)/i);
+            if (tarikhRaw) {
+              const months = { januari: '01', februari: '02', mac: '03', april: '04', mei: '05', jun: '06', julai: '07', ogos: '08', september: '09', oktober: '10', november: '11', disember: '12' };
+              const parts = tarikhRaw.split(' ');
+              if (parts.length >= 3) {
+                const day = parts[0].padStart(2, '0');
+                const month = months[parts[1].toLowerCase()];
+                const year = parts[2];
+                if (month) newValues.kejadian.tarikh = `${year}-${month}-${day}`;
+              }
+            }
+            
+            const masaRaw = extract(/Masa:\s*(.*)/i);
+            if (masaRaw) {
+              let [time, period] = masaRaw.toLowerCase().split(' ');
+              let [hours, mins] = time.split('.');
+              if (!mins) [hours, mins] = time.split(':');
+              let h = parseInt(hours);
+              if (period === 'petang' || period === 'malam') { if (h < 12) h += 12; }
+              else if (period === 'pagi' && h === 12) { h = 0; }
+              newValues.kejadian.masa = `${String(h).padStart(2, '0')}:${mins || '00'}`;
             }
 
-            // FORM MODE
+            const lokasi = extract(/Lokasi:\s*(.*)/i);
+            if (lokasi) newValues.kejadian.lokasi = lokasi;
+            const noPlat = extract(/No\. Pendaftaran Kenderaan:\s*(.*)/i);
+            if (noPlat) newValues.lori.noPendaftaran = noPlat;
+            const pemandu = extract(/Nama Pemandu:\s*(.*)/i);
+            if (pemandu) { 
+              newValues.lori.pemandu = pemandu; 
+              newValues.mangsaSaksi.namaMangsa = pemandu; 
+            }
+            const kelajuan = extract(/Kelajuan Terakhir:\s*([\d.]+)/i);
+            if (kelajuan) newValues.lori.kelajuanTerakhir = kelajuan;
+            
+            const ringkasanMatch = rawText.match(/Ringkasan Kejadian:([\s\S]*?)(?=🤕|📸|$)/i);
+            if (ringkasanMatch) newValues.kejadian.perihalan = ringkasanMatch[1].trim();
+
+            setFormData(newValues);
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+          };
+
+          const handleNestedChange = (section, field, value) => {
+            setFormData(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+          };
+
+          const handlePuncaCheckboxChange = (subSection, field) => {
+            setFormData(prev => ({ 
+              ...prev, 
+              punca: { ...prev.punca, [subSection]: { ...prev.punca[subSection], [field]: !prev.punca[subSection][field] } } 
+            }));
+          };
+
+          const handlePuncaTextChange = (value) => {
+            setFormData(prev => ({ ...prev, punca: { ...prev.punca, faktor: { ...prev.punca.faktor, lainLain: value } } }));
+          };
+
+          const handleImageUpload = (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+              const reader = new FileReader();
+              reader.onloadend = () => { setFormData(prev => ({ ...prev, gambar: [...prev.gambar, reader.result] })); };
+              reader.readAsDataURL(file);
+            });
+          };
+
+          const removeImage = (index) => {
+            setFormData(prev => ({ ...prev, gambar: prev.gambar.filter((_, i) => i !== index) }));
+          };
+
+          const addAction = () => {
+            setFormData(prev => ({ ...prev, tindakan: [...prev.tindakan, { id: Date.now(), perihal: '', tarikhSelesai: '', pegawai: '', status: '' }] }));
+          };
+
+          const updateAction = (id, field, value) => {
+            setFormData(prev => ({ ...prev, tindakan: prev.tindakan.map(item => item.id === id ? { ...item, [field]: value } : item) }));
+          };
+
+          const removeAction = (id) => {
+            setFormData(prev => ({ ...prev, tindakan: prev.tindakan.filter(item => item.id !== id) }));
+          };
+
+          const downloadPDF = () => {
+            setIsGenerating(true);
+            const element = reportRef.current;
+            const opt = {
+              margin: 10,
+              filename: `Laporan_Kemalangan_${formData.lori.noPendaftaran || 'HSE'}.pdf`,
+              image: { type: 'jpeg', quality: 1.0 },
+              html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+            window.html2pdf().set(opt).from(element).save().then(() => setIsGenerating(false));
+          };
+
+          const inputClass = "w-full p-2 border border-neutral-200 rounded-lg outline-none text-sm font-normal transition-all focus:border-red-500 bg-white text-neutral-800";
+          const labelStyle = "text-[11px] font-black text-neutral-400 uppercase tracking-widest ml-1";
+          const formInputStyle = "w-full p-3 border-2 border-neutral-100 rounded-xl outline-none text-sm font-normal transition-all focus:border-red-500 bg-white text-neutral-800";
+
+          if (isPreview) {
             return (
-                <div className="max-w-3xl mx-auto my-10 bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border">
-                    <div className="bg-gradient-to-br from-red-800 to-black p-12 text-white">
-                        <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">Laporan Siasatan Kemalangan</h1>
-                        <p className="opacity-60 text-xs mt-3 uppercase tracking-[0.3em]">HSE Digital Internal System</p>
-                    </div>
-
-                    <div className="p-10 space-y-12">
-                        {/* SMART FILL */}
-                        <section className="bg-red-50 p-8 rounded-[2rem] border-2 border-red-100 shadow-inner">
-                            <div className="flex items-center gap-2 mb-4 text-red-900 font-black text-xs uppercase tracking-widest">
-                                <Icon name="wand-2" /> Pengisian Pantas (Smart Fill)
-                            </div>
-                            <textarea 
-                                className="w-full p-4 rounded-2xl border-2 border-red-200 outline-none mb-4 text-sm" 
-                                rows="3" 
-                                placeholder="Tampal mesej di sini..."
-                                value={rawText}
-                                onChange={(e) => setRawText(e.target.value)}
-                            />
-                            <button onClick={handleAutoFill} className="w-full bg-black text-white py-4 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-800 transition-all">Auto-Isi Borang</button>
-                        </section>
-
-                        {/* SECTION 1 */}
-                        <section>
-                            <SectionHeader icon="map-pin" title="1. Maklumat Kejadian" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Lokasi Kejadian</label>
-                                    <input className={inputClass} value={formData.kejadian.lokasi} onChange={(e) => handleNestedChange('kejadian', 'lokasi', e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Tarikh</label>
-                                    <input type="date" className={inputClass} value={formData.kejadian.tarikh} onChange={(e) => handleNestedChange('kejadian', 'tarikh', e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Masa</label>
-                                    <input type="time" className={inputClass} value={formData.kejadian.masa} onChange={(e) => handleNestedChange('kejadian', 'masa', e.target.value)} />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Ringkasan Kejadian</label>
-                                    <textarea className={inputClass} rows="3" value={formData.kejadian.perihalan} onChange={(e) => handleNestedChange('kejadian', 'perihalan', e.target.value)} />
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* SECTION 2 */}
-                        <section>
-                            <SectionHeader icon="user" title="2. Maklumat Mangsa" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <input placeholder="Nama Penuh" className={inputClass} value={formData.mangsaSaksi.namaMangsa} onChange={(e) => handleNestedChange('mangsaSaksi', 'namaMangsa', e.target.value)} />
-                                <input placeholder="No. KP" className={inputClass} value={formData.mangsaSaksi.noKPMangsa} onChange={(e) => handleNestedChange('mangsaSaksi', 'noKPMangsa', e.target.value)} />
-                                <div className="col-span-2">
-                                    <select className={inputClass} value={formData.mangsaSaksi.keterukanKecederaan} onChange={(e) => handleNestedChange('mangsaSaksi', 'keterukanKecederaan', e.target.value)}>
-                                        <option>Tiada kecederaan</option>
-                                        <option>First Aid</option>
-                                        <option>Lost Time Injury (LTI)</option>
-                                        <option>Fatality</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* SECTION 3 */}
-                        <section>
-                            <SectionHeader icon="truck" title="3. Maklumat Kenderaan" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <input placeholder="No. Plat" className={inputClass} value={formData.lori.noPendaftaran} onChange={(e) => handleNestedChange('lori', 'noPendaftaran', e.target.value)} />
-                                <input placeholder="Nama Pemandu" className={inputClass} value={formData.lori.pemandu} onChange={(e) => handleNestedChange('lori', 'pemandu', e.target.value)} />
-                            </div>
-                        </section>
-
-                        {/* FINAL BUTTON */}
-                        <button 
-                            onClick={() => { window.scrollTo(0,0); setIsPreview(true); }}
-                            className="w-full bg-red-600 text-white py-6 rounded-3xl font-black text-xl shadow-2xl hover:bg-red-700 transition-all active:scale-95 border-b-8 border-red-900"
-                        >
-                            JANA & PREVIEW LAPORAN
-                        </button>
-                    </div>
-                    <footer className="bg-gray-900 p-8 text-center text-gray-500 text-[10px] font-bold tracking-[0.3em] uppercase">
-                        © 2026 Internal HSE Management System
-                    </footer>
+              <div className="min-h-screen bg-neutral-200 flex flex-col items-center p-4 md:p-8">
+                <div className="fixed top-4 bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl flex gap-4 no-print z-50">
+                  <button onClick={() => setIsPreview(false)} className="px-6 py-2 bg-neutral-100 rounded-xl font-bold">← Edit</button>
+                  <button onClick={downloadPDF} disabled={isGenerating} className="px-6 py-2 bg-red-600 text-white rounded-xl font-bold shadow-lg">Download PDF</button>
                 </div>
+                
+                <div ref={reportRef} className="bg-white shadow-2xl p-[15mm] mt-20" style={{ width: '190mm', minHeight: '277mm' }}>
+                  <div className="text-center mb-8 border-b-2 border-black pb-4">
+                    <h1 className="text-2xl font-black uppercase">Laporan Siasatan Kemalangan</h1>
+                    <p className="text-red-600 font-bold uppercase tracking-widest text-[10px]">Jabatan Keselamatan & Kesihatan Pekerjaan (HSE)</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="border-2 border-black p-3">
+                      <h3 className="font-black bg-black text-white px-2 py-0.5 text-[9px] inline-block mb-2 uppercase">1. Butiran Kejadian</h3>
+                      <div className="text-[10px] space-y-1">
+                        <p><strong>Tarikh:</strong> {formData.kejadian.tarikh}</p>
+                        <p><strong>Masa:</strong> {formData.kejadian.masa}</p>
+                        <p><strong>Lokasi:</strong> {formData.kejadian.lokasi}</p>
+                        <p className="italic mt-1 border-t pt-1">"{formData.kejadian.perihalan}"</p>
+                      </div>
+                    </div>
+                    <div className="border-2 border-black p-3">
+                      <h3 className="font-black bg-black text-white px-2 py-0.5 text-[9px] inline-block mb-2 uppercase">2. Butiran Kenderaan</h3>
+                      <div className="text-[10px] space-y-1">
+                        <p><strong>No Plat:</strong> {formData.lori.noPendaftaran}</p>
+                        <p><strong>Model:</strong> {formData.lori.jenamaModel}</p>
+                        <p><strong>Muatan:</strong> {formData.lori.muatanMT} MT</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-2 border-black p-3 mb-4">
+                    <h3 className="font-black bg-black text-white px-2 py-0.5 text-[9px] inline-block mb-2 uppercase">3. Maklumat Mangsa</h3>
+                    <div className="grid grid-cols-2 text-[10px]">
+                      <p><strong>Nama:</strong> {formData.mangsaSaksi.namaMangsa}</p>
+                      <p><strong>Kecederaan:</strong> <span className="font-bold text-red-600 uppercase">{formData.mangsaSaksi.keterukanKecederaan}</span></p>
+                    </div>
+                  </div>
+
+                  {/* Pictures Section */}
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {formData.gambar.map((img, i) => (
+                      <div key={i} className="border p-1"><img src={img} className="w-full h-24 object-contain" /></div>
+                    ))}
+                  </div>
+
+                  <div className="mt-32 flex justify-between px-10">
+                    <div className="text-center border-t border-black border-dotted w-40 pt-1 text-[9px] font-bold">Disediakan Oleh</div>
+                    <div className="text-center border-t border-black border-dotted w-40 pt-1 text-[9px] font-bold">Disahkan Oleh</div>
+                  </div>
+                </div>
+              </div>
             );
+          }
+
+          return (
+            <div className="max-w-3xl mx-auto my-10 bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border">
+              <div className="bg-gradient-to-br from-red-800 to-black p-10 text-white">
+                <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">Laporan Siasatan Kemalangan</h1>
+                <p className="opacity-60 text-xs mt-3 uppercase tracking-widest">HSE Digital Internal System</p>
+              </div>
+
+              <div className="p-8 space-y-12">
+                {/* SMART FILL */}
+                <section className="bg-red-50 p-8 rounded-[2rem] border-2 border-red-100 shadow-inner">
+                  <div className="flex items-center gap-2 mb-4 text-red-900 font-black text-xs uppercase tracking-widest">
+                    <Wand2 size={20} className="animate-pulse" /> Smart Fill (Tampal Mesej)
+                  </div>
+                  <textarea className="w-full p-4 rounded-2xl border-2 border-red-200 outline-none mb-4 text-sm" rows="4" value={rawText} onChange={(e) => setRawText(e.target.value)} />
+                  <button onClick={handleAutoFill} className="w-full bg-black text-white py-4 rounded-xl font-bold text-xs uppercase tracking-widest">Auto-Isi Borang</button>
+                </section>
+
+                <section><SectionHeader icon={MapPin} title="1. Maklumat Kejadian" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2"><label className={labelStyle}>Lokasi</label><input className={formInputStyle} value={formData.kejadian.lokasi} onChange={(e) => handleNestedChange('kejadian', 'lokasi', e.target.value)} /></div>
+                    <div><label className={labelStyle}>Tarikh</label><input type="date" className={formInputStyle} value={formData.kejadian.tarikh} onChange={(e) => handleNestedChange('kejadian', 'tarikh', e.target.value)} /></div>
+                    <div><label className={labelStyle}>Masa</label><input type="time" className={formInputStyle} value={formData.kejadian.masa} onChange={(e) => handleNestedChange('kejadian', 'masa', e.target.value)} /></div>
+                  </div>
+                </section>
+
+                <section><SectionHeader icon={Users} title="2. Maklumat Mangsa" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input placeholder="Nama Penuh" className={formInputStyle} value={formData.mangsaSaksi.namaMangsa} onChange={(e) => handleNestedChange('mangsaSaksi', 'namaMangsa', e.target.value)} />
+                    <select className={formInputStyle} value={formData.mangsaSaksi.keterukanKecederaan} onChange={(e) => handleNestedChange('mangsaSaksi', 'keterukanKecederaan', e.target.value)}>
+                      <option>Tiada kecederaan</option><option>First Aid</option><option>Lost Time Injury (LTI)</option><option>Fatality</option>
+                    </select>
+                  </div>
+                </section>
+
+                <section><SectionHeader icon={Truck} title="3. Maklumat Kenderaan" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input placeholder="No. Plat" className={formInputStyle} value={formData.lori.noPendaftaran} onChange={(e) => handleNestedChange('lori', 'noPendaftaran', e.target.value)} />
+                    <input placeholder="Model Lori" className={formInputStyle} value={formData.lori.jenamaModel} onChange={(e) => handleNestedChange('lori', 'jenamaModel', e.target.value)} />
+                  </div>
+                </section>
+
+                <section><SectionHeader icon={Camera} title="5. Gambar" />
+                  <div className="border-4 border-dashed rounded-[2rem] p-10 text-center hover:bg-red-50 transition-all cursor-pointer">
+                    <label className="cursor-pointer"><Camera size={40} className="mx-auto text-red-600 mb-2" /><span className="font-bold text-xs uppercase">Muat Naik Gambar</span><input type="file" multiple className="hidden" onChange={handleImageUpload} /></label>
+                    <div className="grid grid-cols-4 gap-2 mt-4">{formData.gambar.map((img, i) => (<div key={i} className="relative group"><img src={img} className="h-16 w-full object-cover rounded-lg" /><button onClick={() => removeImage(i)} className="absolute top-0 right-0 bg-black text-white rounded-full p-1 opacity-0 group-hover:opacity-100"><Trash2 size={10} /></button></div>))}</div>
+                  </div>
+                </section>
+
+                <button onClick={() => {window.scrollTo(0,0); setIsPreview(true);}} className="w-full bg-red-600 text-white py-6 rounded-3xl font-black text-xl shadow-2xl hover:bg-red-700 active:scale-95 transition-all border-b-8 border-red-900">JANA & PREVIEW LAPORAN</button>
+              </div>
+            </div>
+          );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
